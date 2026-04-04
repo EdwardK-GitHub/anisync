@@ -1,6 +1,6 @@
-from pathlib import Path
 import secrets
 import string
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse

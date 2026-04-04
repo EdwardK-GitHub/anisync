@@ -26,7 +26,6 @@ from pathlib import Path
 
 from sentence_transformers import SentenceTransformer
 
-
 ALLOWED_TYPES = {"TV", "MOVIE", "OVA", "ONA", "SPECIAL"}
 ALLOWED_STATUSES = {"FINISHED", "ONGOING"}
 
@@ -190,7 +189,7 @@ def main():
     )
 
     with out_path.open("w", encoding="utf-8") as f:
-        for row, embedding in zip(rows, embeddings):
+        for row, embedding in zip(rows, embeddings, strict=True):
             row["embedding"] = [float(x) for x in embedding]
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 

@@ -1,0 +1,21 @@
+services:
+  db:
+    image: pgvector/pgvector:0.8.2-pg18-trixie
+    container_name: anisync_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: anisync
+      POSTGRES_PASSWORD: anisync
+      POSTGRES_DB: anisync
+    ports:
+      - "54329:5432"
+    volumes:
+      - anisync_pg_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anisync -d anisync"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  anisync_pg_data:

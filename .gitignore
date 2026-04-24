@@ -1,0 +1,34 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Local database/data artifacts
+*.dump
+deployment/
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Local generated media can become huge.
+# Do not commit posters/thumbnails to GitHub.
+media/posters/*
+media/thumbnails/*
+!media/posters/.gitkeep
+!media/thumbnails/.gitkeep
+
+# macOS
+.DS_Store

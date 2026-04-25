@@ -21,6 +21,7 @@ class BenchmarkConfig:
     groupfit_lambda: float = 0.3
     groupfit_beta: float = 0.5
     groupfit_alpha: float = 0.5
+    use_msmarco: bool = False
 
     @classmethod
     def from_yaml(cls, path: Path | str | None = None) -> BenchmarkConfig:

@@ -117,6 +117,8 @@ def main() -> None:
     parser.add_argument("--groupfit-lambda", type=float, default=None)
     parser.add_argument("--groupfit-beta", type=float, default=None)
     parser.add_argument("--groupfit-alpha", type=float, default=None)
+    parser.add_argument("--use-msmarco", action="store_true", default=None,
+                        help="Use msmarco-MiniLM-L6-cos-v5 for text alignment term")
     args = parser.parse_args()
 
     cfg = BenchmarkConfig.from_yaml(Path(args.config))
@@ -158,8 +160,9 @@ def main() -> None:
         "num_groups": len(group_results),
     }
 
+    algo_label = args.algorithm + ("_msmarco" if cfg.use_msmarco else "")
     output = {
-        "algorithm": args.algorithm,
+        "algorithm": algo_label,
         "config": {
             "visible_ratio": cfg.visible_ratio,
             "group_size": cfg.group_size,
@@ -167,6 +170,7 @@ def main() -> None:
             "ndcg_k": cfg.ndcg_k,
             "profile_seed": cfg.profile_seed,
             "group_seed": cfg.group_seed,
+            "use_msmarco": cfg.use_msmarco,
         },
         "run_at": datetime.now(timezone.utc).isoformat(),
         "groups": group_results,
@@ -176,7 +180,7 @@ def main() -> None:
     results_dir = Path(cfg.results_dir).resolve()
     results_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    out_path = results_dir / f"{args.algorithm}_{timestamp}.json"
+    out_path = results_dir / f"{algo_label}_{timestamp}.json"
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
 

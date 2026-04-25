@@ -71,6 +71,28 @@ def retrieve_top_100(
     return list(rows[:100])
 
 
+def retrieve_top_100_msmarco(
+    db: Session,
+    query_embedding: np.ndarray,
+    *,
+    exclude_ids: set[int] | None = None,
+) -> list[CatalogItem]:
+    """pgvector retrieval using the embedding_msmarco column (text→item path)."""
+    distance_expr = CatalogItem.embedding_msmarco.cosine_distance(
+        query_embedding.astype(float).tolist()
+    )
+    stmt = (
+        select(CatalogItem)
+        .where(CatalogItem.embedding_msmarco.is_not(None))
+        .order_by(distance_expr.asc())
+        .limit(200)
+    )
+    if exclude_ids:
+        stmt = stmt.where(~CatalogItem.id.in_(list(exclude_ids)))
+    rows = db.scalars(stmt).all()
+    return list(rows[:100])
+
+
 def cluster_diverse_rerank(
     candidate_items: list,
     avg_scores: np.ndarray,

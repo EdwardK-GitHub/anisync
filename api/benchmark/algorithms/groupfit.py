@@ -36,7 +36,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 from tqdm import tqdm
 
-from app.embeddings import embed_texts
+from app.embeddings import embed_texts, embed_texts_msmarco
 from benchmark.config import BenchmarkConfig
 from benchmark.methods.base import (
     UserRating,
@@ -57,6 +57,7 @@ _text_cache: dict[str, np.ndarray | None] = {}       # username → text emb or 
 _liked_matrices: dict[str, np.ndarray] = {}           # username → (n_liked, 384)
 _neg_centroids: dict[str, np.ndarray | None] = {}     # username → centroid or None
 _retrieval_cache: dict[str, list] = {}                # username → candidate items
+_item_msmarco_emb: dict[int, np.ndarray] = {}         # item_id → msmarco embedding
 
 
 def precompute(db: Session, groups: list, cfg: BenchmarkConfig) -> None:
@@ -65,9 +66,9 @@ def precompute(db: Session, groups: list, cfg: BenchmarkConfig) -> None:
     Runs once per unique (profile_seed, visible_ratio, group_seed, num_groups)
     combination; subsequent calls with the same config return immediately.
     """
-    global _cache_key, _text_cache, _liked_matrices, _neg_centroids, _retrieval_cache
+    global _cache_key, _text_cache, _liked_matrices, _neg_centroids, _retrieval_cache, _item_msmarco_emb
 
-    key = (cfg.profile_seed, cfg.visible_ratio, cfg.group_seed, cfg.num_groups)
+    key = (cfg.profile_seed, cfg.visible_ratio, cfg.group_seed, cfg.num_groups, cfg.use_msmarco)
     if _cache_key == key:
         return
 
@@ -90,7 +91,8 @@ def precompute(db: Session, groups: list, cfg: BenchmarkConfig) -> None:
             new_text_cache[username] = None
 
     if texts_to_embed:
-        embeddings = embed_texts(texts_to_embed, batch_size=128, show_progress_bar=True)
+        embed_fn = embed_texts_msmarco if cfg.use_msmarco else embed_texts
+        embeddings = embed_fn(texts_to_embed, batch_size=128, show_progress_bar=True)
         for username, emb in zip(usernames_to_embed, embeddings):
             new_text_cache[username] = emb
 
@@ -137,12 +139,23 @@ def precompute(db: Session, groups: list, cfg: BenchmarkConfig) -> None:
         visible_ids = {r.catalog_item_id for r in visible}
         new_retrieval[username] = retrieve_top_100(db, liked_query, exclude_ids=visible_ids)
 
+    # ── 5. Pre-fetch msmarco embeddings for all candidate items ───────────────
+    new_msmarco: dict[int, np.ndarray] = {}
+    if cfg.use_msmarco:
+        candidate_ids = {item.id for candidates in new_retrieval.values() for item in candidates}
+        candidate_items_map = fetch_catalog_items_by_ids(db, list(candidate_ids))
+        for iid, item in candidate_items_map.items():
+            if item.embedding_msmarco is not None:
+                new_msmarco[iid] = np.array(item.embedding_msmarco, dtype=np.float32)
+
     _text_cache = new_text_cache
     _liked_matrices = new_liked
     _neg_centroids = new_neg
     _retrieval_cache = new_retrieval
+    _item_msmarco_emb = new_msmarco
     _cache_key = key
-    print(f"  [groupfit] precompute done: {len(all_profiles)} users, "
+    model_tag = "msmarco" if cfg.use_msmarco else "standard"
+    print(f"  [groupfit/{model_tag}] precompute done: {len(all_profiles)} users, "
           f"{len(texts_to_embed)} texts embedded, {len(all_item_ids)} items fetched")
 
 
@@ -167,6 +180,16 @@ def recommend(
         [np.array(item.embedding, dtype=np.float32) for item in candidate_items], axis=0
     )
 
+    # Text term uses msmarco embeddings when available; falls back to symmetric.
+    if cfg.use_msmarco and _item_msmarco_emb:
+        c_text_matrix = np.stack(
+            [_item_msmarco_emb.get(item.id, np.array(item.embedding, dtype=np.float32))
+             for item in candidate_items],
+            axis=0,
+        )
+    else:
+        c_text_matrix = c_matrix
+
     n = len(candidate_items)
     pos_rows: list[np.ndarray] = []
     neg_rows: list[np.ndarray] = []
@@ -180,7 +203,7 @@ def recommend(
         neg_rows.append(neg_c @ c_matrix.T if neg_c is not None else np.zeros(n, dtype=np.float32))
 
         t_u = _text_cache.get(username)
-        text_rows.append(t_u @ c_matrix.T if t_u is not None else np.zeros(n, dtype=np.float32))
+        text_rows.append(t_u @ c_text_matrix.T if t_u is not None else np.zeros(n, dtype=np.float32))
 
     pos_matrix = np.stack(pos_rows)
     neg_matrix = np.stack(neg_rows)

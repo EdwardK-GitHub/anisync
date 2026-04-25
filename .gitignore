@@ -30,9 +30,5 @@ media/thumbnails/*
 !media/posters/.gitkeep
 !media/thumbnails/.gitkeep
 
-# Benchmark artefacts
-benchmark/cache/
-benchmark/results/*.json
-
 # macOS
 .DS_Store

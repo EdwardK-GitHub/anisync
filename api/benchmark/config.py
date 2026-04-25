@@ -18,6 +18,9 @@ class BenchmarkConfig:
     llm_model: str = "claude-haiku-4-5-20251001"
     llm_cache_dir: str = "../benchmark/cache/llm"
     results_dir: str = "../benchmark/results"
+    groupfit_lambda: float = 0.3
+    groupfit_beta: float = 0.5
+    groupfit_alpha: float = 0.5
 
     @classmethod
     def from_yaml(cls, path: Path | str | None = None) -> BenchmarkConfig:

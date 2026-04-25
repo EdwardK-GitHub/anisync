@@ -41,7 +41,7 @@ def normalize_rows(vectors: np.ndarray) -> np.ndarray:
     return vectors / norms
 
 
-def embed_texts(texts: list[str], batch_size: int = 64) -> np.ndarray:
+def embed_texts(texts: list[str], batch_size: int = 64, show_progress_bar: bool = False) -> np.ndarray:
     """
     Encode text into normalized 384-dimensional embeddings.
     """
@@ -51,6 +51,6 @@ def embed_texts(texts: list[str], batch_size: int = 64) -> np.ndarray:
         batch_size=batch_size,
         convert_to_numpy=True,
         normalize_embeddings=False,
-        show_progress_bar=False,
+        show_progress_bar=show_progress_bar,
     ).astype(np.float32)
     return normalize_rows(embeddings)

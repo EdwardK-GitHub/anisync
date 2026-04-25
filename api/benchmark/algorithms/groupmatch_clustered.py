@@ -22,7 +22,7 @@ from app.ml.kmeans import choose_k_and_cluster
 from benchmark.config import BenchmarkConfig
 from benchmark.methods.base import (
     UserRating,
-    build_profile_query_embedding,
+    build_liked_query_embedding,
     cluster_diverse_rerank,
     retrieve_top_100,
 )
@@ -38,7 +38,7 @@ def recommend(
 
     for visible in visible_by_user.values():
         visible_ids = {r.catalog_item_id for r in visible}
-        q_emb = build_profile_query_embedding(db, visible)
+        q_emb = build_liked_query_embedding(db, visible)
         query_embeddings.append(q_emb)
         for item in retrieve_top_100(db, q_emb, exclude_ids=visible_ids):
             candidate_pool[item.id] = item

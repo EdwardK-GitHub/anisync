@@ -16,7 +16,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 
 from benchmark.config import BenchmarkConfig
-from benchmark.methods.base import UserRating, build_profile_query_embedding, retrieve_top_100
+from benchmark.methods.base import UserRating, build_liked_query_embedding, retrieve_top_100
 
 
 def recommend(
@@ -29,7 +29,7 @@ def recommend(
 
     for visible in visible_by_user.values():
         all_visible_ids.update(r.catalog_item_id for r in visible)
-        user_embeddings.append(build_profile_query_embedding(db, visible))
+        user_embeddings.append(build_liked_query_embedding(db, visible))
 
     centroid = np.mean(user_embeddings, axis=0)
     centroid /= max(float(np.linalg.norm(centroid)), 1e-12)

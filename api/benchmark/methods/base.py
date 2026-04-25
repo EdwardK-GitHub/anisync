@@ -100,6 +100,70 @@ def cluster_diverse_rerank(
     return [candidate_items[i].id for i in promoted + rest]
 
 
+def build_proxy_relevant_set(
+    db: Session,
+    hidden: list[UserRating],
+    n_top: int = 10,
+    n_neighbors: int = 10,
+) -> dict[int, float]:
+    """Expand hidden ratings into a proxy relevance set via embedding neighbors.
+
+    Motivation: user ratings are from 2018; the catalog contains anime up to 2026.
+    A user who loved a show will likely also love similar newer shows that can't
+    appear in their hidden set. This function bridges that gap.
+
+    Algorithm:
+      1. Take the top-n_top hidden items by score (score > 5 only — positive signal).
+      2. For each, find its n_neighbors nearest catalog entries by embedding distance.
+      3. Assign each proxy item a relevance of max(nominating_score - 5, 0).
+         When multiple hidden items nominate the same proxy, take the max score.
+
+    Returns: {catalog_item_id: relevance} — suitable for ndcg_at_k().
+    """
+    top_hidden = sorted(
+        [r for r in hidden if r.score > 5],
+        key=lambda r: -r.score,
+    )[:n_top]
+
+    if not top_hidden:
+        return {}
+
+    seed_items = fetch_catalog_items_by_ids(db, [r.catalog_item_id for r in top_hidden])
+
+    proxy_rel: dict[int, float] = {}
+    for r in top_hidden:
+        item = seed_items.get(r.catalog_item_id)
+        if item is None or item.embedding is None:
+            continue
+        rel = float(r.score - 5)
+        emb = np.array(item.embedding, dtype=np.float32)
+        distance_expr = CatalogItem.embedding.cosine_distance(emb.astype(float).tolist())
+        stmt = select(CatalogItem.id).order_by(distance_expr.asc()).limit(n_neighbors)
+        for nid in db.scalars(stmt).all():
+            proxy_rel[nid] = max(proxy_rel.get(nid, 0.0), rel)
+
+    return proxy_rel
+
+
+def build_liked_query_embedding(db: Session, visible: list[UserRating], threshold: int = 7) -> np.ndarray:
+    """Query embedding built from liked items only (score >= threshold).
+
+    Falls back to all visible items if none meet the threshold.
+    Items are averaged with equal weight (no score weighting).
+    """
+    liked = [r for r in visible if r.score >= threshold] or visible
+    items = fetch_catalog_items_by_ids(db, [r.catalog_item_id for r in liked])
+    embs = [
+        np.array(items[r.catalog_item_id].embedding, dtype=np.float32)
+        for r in liked
+        if r.catalog_item_id in items and items[r.catalog_item_id].embedding is not None
+    ]
+    if not embs:
+        raise ValueError(f"No embeddings found for liked items")
+    avg = np.mean(embs, axis=0)
+    return avg / max(float(np.linalg.norm(avg)), 1e-12)
+
+
 def build_profile_query_embedding(db: Session, visible: list[UserRating]) -> np.ndarray:
     ids = [r.catalog_item_id for r in visible]
     items = fetch_catalog_items_by_ids(db, ids)

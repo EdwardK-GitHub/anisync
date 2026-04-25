@@ -68,6 +68,7 @@ Available algorithms:
 | `groupmatch_raw` | Per-user retrieval → union pool → rank by mean GroupMatch score |
 | `groupmatch_clustered` | Same as `groupmatch_raw` + promotes top-5 per cluster to the front, globally ordered by GroupMatch |
 | `groupmatch_raw_llm` | Same as `groupmatch_raw` but uses LLM-generated preference text as the query (mirrors the live web app) |
+| `groupfit` | Per-item positive scoring (max over liked items) with `min` fairness aggregation, negative centroid penalty, and optional LLM text alignment |
 
 Key options (all override `config.yaml`):
 
@@ -94,6 +95,28 @@ cd api && python -m benchmark.summarize --ablate visible_ratio --algorithm group
 # Cross-algorithm comparison at a fixed config
 cd api && python -m benchmark.summarize --compare-methods --visible-ratio 0.3 --group-size 4
 ```
+
+---
+
+## Evaluation methodology
+
+NDCG@K is computed against a **proxy relevance set** rather than the raw hidden ratings.
+
+User ratings are from 2018; the catalog contains anime up to 2026. A user who
+loved a show should receive credit when the algorithm surfaces thematically
+similar newer anime — even if that show didn't exist when they wrote their
+ratings. The proxy expansion bridges this gap via the embedding space.
+
+For each user, `build_proxy_relevant_set` in `api/benchmark/methods/base.py`:
+
+1. Selects the top-10 hidden items by score (score > 5 only).
+2. For each, queries the 10 nearest catalog entries by embedding distance.
+3. Assigns `relevance = max(nominating_score − 5, 0)` to each proxy item,
+   taking the max when multiple hidden items nominate the same entry.
+
+This yields up to 100 proxy items per user as ground truth. The original hidden
+items appear naturally (each item is its own nearest neighbor), so the metric
+is a strict superset of direct-match scoring.
 
 ---
 
@@ -154,6 +177,7 @@ api/benchmark/          # Python source
     groupmatch_raw.py
     groupmatch_clustered.py
     groupmatch_raw_llm.py
+    groupfit.py
   methods/
     base.py             # shared utilities
   build_profiles.py

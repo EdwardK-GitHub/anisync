@@ -77,6 +77,32 @@ def print_method_comparison(results: list[dict], fixed_config: dict) -> None:
         print(_row(method, avg_mean, avg_std, avg_worst))
 
 
+def print_grid_table(results: list[dict], row_key: str, col_key: str, method: str) -> None:
+    """Print a 2D grid of mean_NDCG for two varying config parameters."""
+    row_vals = sorted({r["config"].get(row_key) for r in results}, key=lambda x: (x is None, x))
+    col_vals = sorted({r["config"].get(col_key) for r in results}, key=lambda x: (x is None, x))
+
+    # Index results by (row_val, col_val)
+    cell: dict[tuple, float] = {}
+    for r in results:
+        k = (r["config"].get(row_key), r["config"].get(col_key))
+        cell[k] = r["summary"]["mean_ndcg"]
+
+    col_w = 8
+    row_label_w = max(len(row_key), max(len(str(v)) for v in row_vals)) + 2
+
+    print(f"\n# Ablation grid: {row_key} × {col_key} | method: {method}  (mean_NDCG)")
+    header = f"  {row_key:<{row_label_w}}" + "".join(f"  {str(v):>{col_w}}" for v in col_vals)
+    print(header)
+    print("  " + "-" * (row_label_w + (col_w + 2) * len(col_vals)))
+    for rv in row_vals:
+        row_str = f"  {str(rv):<{row_label_w}}"
+        for cv in col_vals:
+            val = cell.get((rv, cv))
+            row_str += f"  {val:>{col_w}.4f}" if val is not None else f"  {'—':>{col_w}}"
+        print(row_str)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", default="../benchmark/results")
@@ -114,7 +140,21 @@ def main() -> None:
         print_method_comparison(results, fixed)
 
     if not args.ablate and not args.compare_methods:
-        print_method_comparison(results, {})
+        algorithms = {r.get("algorithm") or r.get("method", "unknown") for r in results}
+        if len(algorithms) == 1:
+            config_keys = {k for r in results for k in r["config"]}
+            varying = [
+                k for k in sorted(config_keys)
+                if len({r["config"].get(k) for r in results}) > 1
+            ]
+            if len(varying) == 2:
+                print_grid_table(results, varying[0], varying[1], next(iter(algorithms)))
+            elif len(varying) == 1:
+                print_ablation_table(results, varying[0], next(iter(algorithms)))
+            else:
+                print_method_comparison(results, {})
+        else:
+            print_method_comparison(results, {})
 
 
 if __name__ == "__main__":

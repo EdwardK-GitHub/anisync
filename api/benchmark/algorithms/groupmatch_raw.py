@@ -14,7 +14,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 
 from benchmark.config import BenchmarkConfig
-from benchmark.methods.base import UserRating, build_profile_query_embedding, retrieve_top_100
+from benchmark.methods.base import UserRating, build_liked_query_embedding, retrieve_top_100
 
 
 def recommend(
@@ -27,7 +27,7 @@ def recommend(
 
     for visible in visible_by_user.values():
         visible_ids = {r.catalog_item_id for r in visible}
-        q_emb = build_profile_query_embedding(db, visible)
+        q_emb = build_liked_query_embedding(db, visible)
         query_embeddings.append(q_emb)
         for item in retrieve_top_100(db, q_emb, exclude_ids=visible_ids):
             candidate_pool[item.id] = item

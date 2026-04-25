@@ -23,19 +23,28 @@ from tqdm import tqdm
 
 from app.db import SessionLocal
 from benchmark.config import BenchmarkConfig
-from benchmark.methods.base import UserProfile, UserRating, ndcg_at_k, split_profile
+from benchmark.methods.base import (
+    UserProfile,
+    UserRating,
+    build_proxy_relevant_set,
+    ndcg_at_k,
+    split_profile,
+)
 
 ALGORITHMS = [
     "centroid",
     "groupmatch_raw",
     "groupmatch_clustered",
     "groupmatch_raw_llm",
+    "groupfit",
+    "groupfit_pos_text",
 ]
 
 
 def load_algorithm(name: str):
     module = importlib.import_module(f"benchmark.algorithms.{name}")
-    return module.recommend
+    precompute_fn = getattr(module, "precompute", None)
+    return module.recommend, precompute_fn
 
 
 def load_profiles(profiles_path: Path) -> list[UserProfile]:
@@ -82,11 +91,8 @@ def score_group(db, group: list[UserProfile], recommend_fn, cfg: BenchmarkConfig
 
     ndcg_scores = []
     for profile in group:
-        hidden_rel = {
-            r.catalog_item_id: max(r.score - 5, 0)
-            for r in hidden_by_user[profile.username]
-        }
-        ndcg_scores.append(ndcg_at_k(ranked_ids, hidden_rel, cfg.ndcg_k))
+        proxy_rel = build_proxy_relevant_set(db, hidden_by_user[profile.username])
+        ndcg_scores.append(ndcg_at_k(ranked_ids, proxy_rel, cfg.ndcg_k))
 
     return {
         "users": [p.username for p in group],
@@ -108,6 +114,9 @@ def main() -> None:
     parser.add_argument("--profile-seed", type=int, default=None)
     parser.add_argument("--profiles", default="../data/processed/user_profiles.jsonl")
     parser.add_argument("--results-dir", default=None)
+    parser.add_argument("--groupfit-lambda", type=float, default=None)
+    parser.add_argument("--groupfit-beta", type=float, default=None)
+    parser.add_argument("--groupfit-alpha", type=float, default=None)
     args = parser.parse_args()
 
     cfg = BenchmarkConfig.from_yaml(Path(args.config))
@@ -121,7 +130,7 @@ def main() -> None:
             f"Profiles not found: {profiles_path}. Run build_profiles.py first."
         )
 
-    recommend_fn = load_algorithm(args.algorithm)
+    recommend_fn, precompute_fn = load_algorithm(args.algorithm)
     profiles = load_profiles(profiles_path)
     print(f"Loaded {len(profiles)} user profiles.")
 
@@ -130,6 +139,8 @@ def main() -> None:
 
     db = SessionLocal()
     try:
+        if precompute_fn is not None:
+            precompute_fn(db, groups, cfg)
         group_results = []
         for group_idx, group in enumerate(tqdm(groups, desc="Scoring groups")):
             result = score_group(db, group, recommend_fn, cfg)

@@ -5,6 +5,28 @@ The benchmark runner (`run.py`) loads them by name and calls `recommend()`.
 
 ---
 
+## Evaluation methodology
+
+NDCG@K is computed against a **proxy relevance set**, not the raw hidden ratings.
+
+Because user ratings are from 2018 and the catalog extends to 2026, directly
+checking whether a recommended item appears in a user's hidden set undervalues
+recommendations of equivalent newer anime the user never had the chance to rate.
+
+The proxy set is built per user from their hidden ratings by `build_proxy_relevant_set`
+in `methods/base.py`:
+
+1. Take the top-10 hidden items by score (score > 5 only).
+2. For each, find its 10 nearest catalog entries by embedding distance.
+3. Assign each proxy item `relevance = max(nominating_score − 5, 0)`. When
+   multiple hidden items nominate the same proxy, take the max relevance.
+
+This gives up to 100 proxy items per user that serve as ground truth. The
+original hidden items appear naturally (an item is its own nearest neighbor),
+so the metric is a strict superset of the naive direct-match approach.
+
+---
+
 ## Interface contract
 
 Every algorithm must expose a single function with this exact signature:
@@ -89,6 +111,37 @@ GroupMatch score. Nothing is filtered out.
   GroupMatch ordering
 - **Weakness**: adds k-means cost; benefit depends on whether the candidate
   pool actually contains distinct thematic clusters
+
+### `groupfit.py` — GroupFit
+
+Implements the scoring formula from the design critique document. Uses three
+distinct per-user signals and three distinct aggregations:
+
+```
+groupfit(i) = min_u  max_j (e_i · liked_u_j)     # fairness: every user matches
+            − λ    * mean_u (e_i · neg_u)          # shared dislike penalty
+            + β    * mean_u (e_i · t_u)            # shared mood alignment (optional)
+```
+
+- **Positive signal**: max cosine similarity to any liked item (score ≥ 7) — treats
+  each liked anime as an independent taste direction, never collapsing them into a
+  centroid. Aggregated with `min` so a candidate must match *every* user.
+- **Negative signal**: cosine similarity to the mean embedding of disliked items
+  (score ≤ 4). Aggregated with `mean` — one person's dislikes don't veto the group.
+- **Text signal**: similarity to the LLM-cached preference text embedding `t_u`.
+  Aggregated with `mean`. Zero and silently omitted if no cache entry exists.
+
+Retrieval is identical to `groupmatch_raw` (score-weighted profile embedding →
+pgvector query per user). The novelty is entirely in the scoring step.
+
+Constants `LAMBDA=0.3` and `BETA=0.5` are the only free parameters.
+
+Optionally requires `llm_translate.py` for the text term (degrades gracefully without it).
+
+- **Strength**: the `min` on the positive term directly enforces that no user is left
+  behind; independent liked-item modes prevent semantic averaging from blurring taste
+- **Weakness**: `min` can be dominated by a single outlier user; no per-user k-means
+  on taste modes (each liked item is a mode, which may be noisy for users with many ratings)
 
 ### `groupmatch_raw_llm.py` — GroupMatch Raw (LLM query)
 

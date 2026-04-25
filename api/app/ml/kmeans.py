@@ -162,14 +162,9 @@ def manual_kmeans(
     return best
 
 
-def silhouette_score(x: np.ndarray, assignments: np.ndarray) -> float | None:
+def silhouette_score(x: np.ndarray, assignments: np.ndarray) -> float:
     """
     Compute average silhouette score manually.
-
-    Returns None when the score is undefined (fewer than 2 clusters,
-    or every point sits alone in its own cluster). The legal silhouette
-    range is [-1.0, 1.0], so we use None as the "not computable" sentinel
-    instead of a magic number that collides with a real worst-case score.
 
     This is O(N^2), which is fine because AniSync clusters only the
     room candidate pool, not the full anime catalog.
@@ -178,7 +173,7 @@ def silhouette_score(x: np.ndarray, assignments: np.ndarray) -> float | None:
     labels = np.unique(assignments)
 
     if labels.size < 2 or labels.size >= n:
-        return None
+        return -1.0
 
     pairwise = squared_distances(x, x)
     scores: list[float] = []
@@ -255,19 +250,14 @@ def choose_k_and_cluster(
         fallback = manual_kmeans(x, 2, random_seed=random_seed)
         return KMeansResult(**{**fallback.__dict__, "silhouette": silhouette_score(x, fallback.assignments)})
 
-    # Use `is None` instead of truthy fallback so a legitimate silhouette of
-    # 0.0 (boundary clustering) is not silently treated as the worst score.
-    def score_or_worst(result: KMeansResult) -> float:
-        return result.silhouette if result.silhouette is not None else -1.0
-
-    best_score = max(score_or_worst(result) for result in valid_results)
+    best_score = max(result.silhouette or -1.0 for result in valid_results)
 
     # Product-aware tie rule: if within 0.02, prefer smaller K.
     near_best = [
         result
         for result in valid_results
-        if (best_score - score_or_worst(result)) <= 0.02
+        if (best_score - (result.silhouette or -1.0)) <= 0.02
     ]
 
-    near_best.sort(key=lambda result: (result.k, -score_or_worst(result)))
+    near_best.sort(key=lambda result: (result.k, -(result.silhouette or -1.0)))
     return near_best[0]

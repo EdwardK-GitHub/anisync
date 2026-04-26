@@ -16,7 +16,7 @@ import {
   Vote,
   X,
 } from 'lucide-react'
-import { API_BASE, apiFetch, assetUrl } from './api'
+import { API_BASE, apiFetch, assetUrl, clearAuthToken, getAuthToken, saveAuthToken } from './api'
 
 type User = {
   id: number
@@ -149,9 +149,13 @@ function Shell({
   const navigate = useNavigate()
 
   async function logout() {
-    await apiFetch('/api/auth/logout', { method: 'POST', body: '{}' })
-    await refreshMe()
-    navigate('/login')
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST', body: '{}' })
+    } finally {
+      clearAuthToken()
+      await refreshMe()
+      navigate('/login')
+    }
   }
 
   return (
@@ -286,7 +290,7 @@ function AuthPage({ mode, refreshMe }: { mode: 'login' | 'register'; refreshMe: 
     setError('')
 
     try {
-      await apiFetch(`/api/auth/${isRegister ? 'register' : 'login'}`, {
+      const data = await apiFetch<{ user: User; auth_token?: string }>(`/api/auth/${isRegister ? 'register' : 'login'}`, {
         method: 'POST',
         body: JSON.stringify({
           email,
@@ -294,6 +298,8 @@ function AuthPage({ mode, refreshMe }: { mode: 'login' | 'register'; refreshMe: 
           password,
         }),
       })
+
+      saveAuthToken(data.auth_token)
       await refreshMe()
       navigate('/dashboard')
     } catch (err) {
@@ -539,7 +545,9 @@ function RoomPage() {
     function connect() {
       const wsBase = API_BASE.replace(/^http/, 'ws')
       try {
-        socket = new WebSocket(`${wsBase}/ws/rooms/${code}`)
+        const token = getAuthToken()
+        const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : ''
+        socket = new WebSocket(`${wsBase}/ws/rooms/${encodeURIComponent(code)}${tokenQuery}`)
       } catch (err) {
         // Constructor throws on invalid URL or insecure context.
         console.warn('Room WebSocket constructor failed:', err)

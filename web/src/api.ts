@@ -1,9 +1,39 @@
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
 
+const AUTH_TOKEN_STORAGE_KEY = "anisync_auth_token"
+
+export function getAuthToken(): string {
+  try {
+    return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) ?? ""
+  } catch {
+    return ""
+  }
+}
+
+export function saveAuthToken(token?: string | null) {
+  if (!token) return
+
+  try {
+    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token)
+  } catch {
+    // Ignore storage failures. Cookie auth may still work.
+  }
+}
+
+export function clearAuthToken() {
+  try {
+    window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  const token = getAuthToken()
+
   let response: Response
   try {
     response = await fetch(`${API_BASE}${path}`, {
@@ -11,18 +41,15 @@ export async function apiFetch<T>(
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers ?? {}),
       },
     })
   } catch (err) {
-    // fetch() rejects on network failure / CORS / DNS, NOT on 4xx/5xx.
-    // Surface a friendly message instead of leaking "TypeError: Failed to fetch"
-    // through every screen's error banner.
     const detail = err instanceof Error ? err.message : "Network error"
     throw new Error(`Network error — could not reach the server (${detail}).`)
   }
 
-  // 204 No Content has no body — don't try to parse it.
   if (response.status === 204) {
     if (!response.ok) {
       throw new Error("Request failed.")

@@ -24,7 +24,13 @@ from app.models import (
     User,
 )
 from app.realtime import manager
-from app.security import get_current_user, hash_password, verify_password
+from app.security import (
+    create_auth_token,
+    get_current_user,
+    get_user_id_from_auth_token,
+    hash_password,
+    verify_password,
+)
 from app.services.recommender import compute_recommendations, compute_vote_summary
 
 
@@ -375,7 +381,10 @@ def register(payload: RegisterIn, request: Request, db: Session = Depends(get_db
 
     request.session["user_id"] = user.id
 
-    return {"user": {"id": user.id, "email": user.email, "display_name": user.display_name}}
+    return {
+    "user": {"id": user.id, "email": user.email, "display_name": user.display_name},
+    "auth_token": create_auth_token(user.id),
+    }
 
 
 @app.post("/api/auth/login")
@@ -386,7 +395,10 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)) -> 
 
     request.session["user_id"] = user.id
 
-    return {"user": {"id": user.id, "email": user.email, "display_name": user.display_name}}
+    return {
+    "user": {"id": user.id, "email": user.email, "display_name": user.display_name},
+    "auth_token": create_auth_token(user.id),
+    }
 
 
 @app.post("/api/auth/logout")
@@ -810,6 +822,10 @@ async def room_websocket(code: str, websocket: WebSocket, db: Session = Depends(
     Complex rendering data is fetched over normal HTTP API calls.
     """
     raw_user_id = websocket.session.get("user_id") if hasattr(websocket, "session") else None
+
+    if raw_user_id is None:
+        raw_user_id = get_user_id_from_auth_token(websocket.query_params.get("token"))
+
     try:
         user_id = int(raw_user_id) if raw_user_id is not None else None
     except (TypeError, ValueError):

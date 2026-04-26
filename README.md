@@ -56,6 +56,8 @@ Decompress it once before preprocessing:
 zstd -d data/raw/anime-offline-database.jsonl.zst
 ```
 
+If you want a newer release of the metadata dump, grab the latest `anime-offline-database.jsonl` from the upstream project: <https://github.com/manami-project/anime-offline-database/releases>. Drop it into `data/raw/` (replacing the bundled copy) and continue with preprocessing.
+
 ### 5. Preprocess the catalog
 
 From inside `api/`:
@@ -135,7 +137,7 @@ The offline benchmark in `benchmark/` measures recommendation quality (NDCG@K) b
 - `user_profiles.jsonl.zst` — ~2,000 MAL users with ≥15 ratings, with each rating already mapped to a `catalog_item_id` (decompress with `zstd -d data/processed/user_profiles.jsonl.zst`)
 - `mal_to_catalog.json` — MAL ID → catalog ID mapping derived from the bundled anime database
 
-The 2.1 GB raw `animelists_cleaned.csv` is **not** bundled and is only needed if you want to regenerate `user_profiles.jsonl` from scratch. With the bundled files, you can run benchmarks directly — see `benchmark/README.md` for details.
+The 2.1 GB raw `animelists_cleaned.csv` is **not** bundled and is only needed if you want to regenerate `user_profiles.jsonl` from scratch. If you do, download it from Kaggle: <https://www.kaggle.com/datasets/azathoth42/myanimelist?resource=download&select=animelists_cleaned.csv>. With the bundled files, you can run benchmarks directly — see `benchmark/README.md` for details.
 
 ---
 

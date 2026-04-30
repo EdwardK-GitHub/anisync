@@ -3,7 +3,7 @@
 Offline evaluation harness for group anime recommendation algorithms.
 Each algorithm is scored by NDCG@K against real MyAnimeList ratings held out as ground truth.
 
-For the full design and algorithm descriptions see [`description.tex`](description.tex).
+For the full design and algorithm descriptions see [`../docs/benchmark_methodology.tex`](../docs/benchmark_methodology.tex) (methodology + ablation findings) and [`../docs/recommendation_algorithm.tex`](../docs/recommendation_algorithm.tex) (runtime algorithm specification).
 
 ---
 
@@ -166,9 +166,9 @@ Shared utilities (pgvector retrieval, profile embedding, NDCG) are in
 benchmark/              # config, cache, results (not Python)
   config.yaml
   cache/
-    llm/                # LLM translation cache (gitignored)
-  results/              # one JSON per run (gitignored)
-  description.tex       # full algorithm and design documentation
+    llm.tar.zst         # bundled LLM translation cache (tracked, ~306 KB)
+    llm/                # cache after unpacking the archive (gitignored)
+  results/              # one JSON per run (gitignored, except ablation dirs)
   README.md             # this file
 
 api/benchmark/          # Python source
@@ -191,25 +191,43 @@ api/benchmark/          # Python source
 
 ## LLM-assisted algorithms (optional)
 
-Some algorithms may use an LLM to translate a user's visible ratings into a
-natural-language preference description, which is then embedded and used as the
-query vector. This requires:
+The `groupmatch_raw_llm` algorithm replaces each user's mean liked-item embedding
+with the embedding of an LLM-written natural-language summary of their ratings,
+mirroring the live web app where users type a free-text mood line. The summaries
+are produced offline by the Claude Batch API.
 
-1. `ANTHROPIC_API_KEY` set in your `.env` file.
-2. Running the translation step before `run.py`:
-   ```bash
-   cd api && python -m benchmark.llm_translate --visible-ratio 0.3
-   ```
-   This submits a Claude Batch API job (~50% cheaper than real-time), polls
-   until complete, and caches results to `benchmark/cache/llm/`. Subsequent
-   runs with the same config read from cache at no cost.
+### Default: use the bundled cache
 
-   To resume an interrupted batch:
-   ```bash
-   cd api && python -m benchmark.llm_translate --batch-id <id> --visible-ratio 0.3
-   ```
+The 2,000 translated profiles for the canonical config (`profile_seed=123`,
+`visible_ratio=0.5`) are bundled in this repo as a compressed tarball. **Unpack
+once before running `groupmatch_raw_llm`:**
+
+```bash
+# from the repo root
+tar --zstd -xf benchmark/cache/llm.tar.zst -C benchmark/cache
+```
+
+This populates `benchmark/cache/llm/` with one `.txt` per `(username,
+profile_seed, visible_ratio)`. The benchmark reads from this directory directly
+— no API key required, no inference cost.
+
+### Refresh or extend the cache (optional)
+
+Only needed if you change `profile_seed` or `visible_ratio`, or want to use a
+newer Claude model. Requires `ANTHROPIC_API_KEY` in `.env`:
+
+```bash
+cd api && python -m benchmark.llm_translate --visible-ratio 0.3
+```
+
+This submits a Claude Batch API job (~50% cheaper than real-time), polls until
+complete, and writes new entries into `benchmark/cache/llm/`. Existing cache
+files for the same config are reused at no cost.
+
+To resume an interrupted batch:
+
+```bash
+cd api && python -m benchmark.llm_translate --batch-id <id> --visible-ratio 0.3
+```
 
 Estimated cost: ~$0.92 per 1,000 users per `visible_ratio` value (batch rate).
-
-The `groupmatch_raw_llm` algorithm uses these cached texts as its query vectors,
-directly replicating the production AniSync pipeline in the benchmark.

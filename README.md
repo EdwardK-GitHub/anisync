@@ -125,11 +125,19 @@ python -m app.scripts.seed_demo
 
 ### Optional benchmark cache
 
-The 2,000 LLM-translated user profile summaries are bundled in `benchmark/cache/llm.tar.zst` so the benchmark is reproducible without re-running Claude. Unpack once before running benchmarks:
+The benchmark suite includes a `groupmatch_raw_llm` variant that uses
+LLM-written natural-language profile summaries as query vectors (this mirrors
+the live web app, where users type a free-text mood line). The 2,000 translated
+profiles for the canonical config are bundled in `benchmark/cache/llm.tar.zst`
+so the benchmark is reproducible without re-running Claude. Unpack once before
+running benchmarks:
 
 ```bash
 tar --zstd -xf benchmark/cache/llm.tar.zst -C benchmark/cache
 ```
+
+End-to-end benchmark commands and the option to refresh the cache are
+documented in [`benchmark/README.md`](benchmark/README.md).
 
 ### Run backend
 

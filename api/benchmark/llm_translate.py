@@ -19,12 +19,13 @@ import anthropic
 from dotenv import load_dotenv
 from sqlalchemy import select
 
+# load_dotenv() must run before app.db imports so DATABASE_URL is read.
 load_dotenv()
-from tqdm import tqdm
+from tqdm import tqdm  # noqa: E402
 
-from app.db import SessionLocal
-from app.models import CatalogItem
-from benchmark.methods.base import UserProfile, UserRating, split_profile
+from app.db import SessionLocal  # noqa: E402
+from app.models import CatalogItem  # noqa: E402
+from benchmark.methods.base import UserProfile, UserRating, split_profile  # noqa: E402
 
 SYSTEM_PROMPT = (
     "Summarize an anime viewer's tastes from their rated shows into "

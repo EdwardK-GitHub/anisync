@@ -15,7 +15,6 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.db import SessionLocal
 from app.embeddings import embed_texts, get_embedding_model
 from app.models import CatalogItem

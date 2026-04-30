@@ -181,7 +181,7 @@ def build_liked_query_embedding(db: Session, visible: list[UserRating], threshol
         if r.catalog_item_id in items and items[r.catalog_item_id].embedding is not None
     ]
     if not embs:
-        raise ValueError(f"No embeddings found for liked items")
+        raise ValueError("No embeddings found for liked items")
     avg = np.mean(embs, axis=0)
     return avg / max(float(np.linalg.norm(avg)), 1e-12)
 
